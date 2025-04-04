@@ -1,6 +1,7 @@
 package com.example.socket;
 import android.Manifest;
 
+import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -17,13 +18,13 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
 
 public class BlueControl extends AppCompatActivity {
-    //public static final int REQUEST_BLUETOOTH = 1;
     ImageButton btnTb1, btnTb2, btnDis;
     TextView txt1, txtMAC;
     BluetoothAdapter myBluetooth = null;
@@ -34,135 +35,74 @@ public class BlueControl extends AppCompatActivity {
     private ProgressDialog progress;
     int flaglamp1;
     int flaglamp2;
-    //SPP UUID. Look for it
     static final UUID myUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Intent newint = getIntent();
-        address = newint.getStringExtra(MainActivity.EXTRA_ADDRESS); //receive the address of the bluetooth device
+        address = newint.getStringExtra(MainActivity.EXTRA_ADDRESS); // receive the address of the bluetooth device
         setContentView(R.layout.activity_control);
-        //Ánh xạ
+
+        // Ánh xạ
         btnTb1 = (ImageButton) findViewById(R.id.btnTb1);
         btnTb2 = (ImageButton) findViewById(R.id.btnTb2);
         txt1 = (TextView) findViewById(R.id.textV1);
         txtMAC = (TextView) findViewById(R.id.textViewMAC);
         btnDis = (ImageButton) findViewById(R.id.btnDisc);
-        new ConnectBT().execute(); //Call the class to connect
-        btnTb1.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                thietTbi1(); //gọi hàm
-            }
-        });
-        btnTb2.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                thiettb7(); //gọi hàm
-            }
-        });
-        btnDis.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Disconnect();
-            }
-        });
+
+        // Kiểm tra và yêu cầu quyền Bluetooth
+        checkBluetoothPermissions();
+
+        new ConnectBT().execute(); // Call the class to connect
+
+        btnTb1.setOnClickListener(v -> thietTbi1()); // Gọi hàm xử lý thiết bị 1
+        btnTb2.setOnClickListener(v -> thiettb7()); // Gọi hàm xử lý thiết bị 7
+        btnDis.setOnClickListener(v -> Disconnect()); // Gọi hàm ngắt kết nối
     }
-    // Hàm xử lý cho thiết bị 1
-    private void thietTbi1() {
-        if (btSocket != null) {
-            try {
-                if (this.flaglamp1 == 0) {
-                    this.flaglamp1 = 1;
-                    this.btnTb1.setBackgroundResource(R.drawable.tb1on);
-                    btSocket.getOutputStream().write("1".toString().getBytes());
-                    txt1.setText("Thiết bị số 1 đang bật");
-                    return;
-                } else {
-                    if (this.flaglamp1 != 1) return;
-                    {
-                        this.flaglamp1 = 0;
-                        this.btnTb1.setBackgroundResource(R.drawable.tb1off);
-                        btSocket.getOutputStream().write("A".toString().getBytes());
-                        txt1.setText("Thiết bị số 1 đang tắt");
-                        return;
-                    }
-                }
-            } catch (IOException e) {
-                msg("Lỗi");
-            }
+
+    // Kiểm tra và yêu cầu quyền Bluetooth
+    private void checkBluetoothPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 100);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH_SCAN}, 101);
         }
     }
 
-    // Hàm xử lý ngắt kết nối Bluetooth
-    private void Disconnect() {
-        if (btSocket != null) {
-            try {
-                btSocket.close();
-            } catch (IOException e) {
-                msg("Lỗi");
-            }
-        }
-        finish();
-    }
-    private void thiettb7() {
-        if (btSocket != null) {
-            try {
-                if (this.flaglamp2 == 0) {
-                    this.flaglamp2 = 1;
-                    this.btnTb2.setBackgroundResource(R.drawable.tb2on);
-                    btSocket.getOutputStream().write("7".toString().getBytes());
-                    txt1.setText("Thiết bị số 7 đang bật");
-                    return;
-                } else {
-                    if (this.flaglamp2 != 1) return;
-                    {
-                        this.flaglamp2 = 0;
-                        this.btnTb2.setBackgroundResource(R.drawable.tb2off);
-                        btSocket.getOutputStream().write("G".toString().getBytes());
-                        txt1.setText("Thiết bị số 7 đang tắt");
-                        return;
-                    }
-                }
-            } catch (IOException e) {
-                msg("Lỗi");
-            }
-        }
-    }
-    private class ConnectBT extends AsyncTask<Void, Void, Void> // UI thread
-    {
-        private boolean ConnectSuccess = true; // if it's here, it's almost connected
+    private class ConnectBT extends AsyncTask<Void, Void, Void> {
+        private boolean ConnectSuccess = true;
+
         @Override
         protected void onPreExecute() {
-            // show a progress dialog
             progress = ProgressDialog.show(BlueControl.this, "Đang kết nối...", "Xin vui lòng đợi!!!");
         }
+
         @Override
         protected Void doInBackground(Void... devices) {
-            // while the progress dialog is shown, the connection is done in background
             try {
                 if (btSocket == null || !isBtConnected) {
-                    myBluetooth = BluetoothAdapter.getDefaultAdapter(); // get the mobile bluetooth device
-                    // connects to the device's address and checks if it's available
+                    myBluetooth = BluetoothAdapter.getDefaultAdapter(); // Get Bluetooth adapter
                     BluetoothDevice dispositivo = myBluetooth.getRemoteDevice(address);
+                    // Kiểm tra quyền Bluetooth Connect
                     if (ActivityCompat.checkSelfPermission(BlueControl.this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
                         btSocket = dispositivo.createInsecureRfcommSocketToServiceRecord(myUUID);
                         BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
                         btSocket.connect();
                     }
-
                 }
             } catch (IOException e) {
-                ConnectSuccess = false; // if the try failed, you can check the exception here
+                ConnectSuccess = false;
             }
             return null;
         }
+
         @Override
         protected void onPostExecute(Void result) {
             super.onPostExecute(result);
-
             if (!ConnectSuccess) {
-                msg("Kết nối thất bại ! Kiểm tra thiết bị.");
+                msg("Kết nối thất bại! Kiểm tra thiết bị.");
                 finish();
             } else {
                 msg("Kết nối thành công.");
@@ -172,12 +112,13 @@ public class BlueControl extends AppCompatActivity {
             progress.dismiss();
         }
     }
+
     private void msg(String s) {
         Toast.makeText(getApplicationContext(), s, Toast.LENGTH_LONG).show();
     }
+
     private void pairedDevicesList1() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            // Nếu chưa có quyền thì yêu cầu cấp
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 100);
             return;
         }
@@ -200,7 +141,65 @@ public class BlueControl extends AppCompatActivity {
         } else {
             Toast.makeText(this, "Bạn cần cấp quyền BLUETOOTH_CONNECT để xem thiết bị.", Toast.LENGTH_SHORT).show();
         }
+
+        if (requestCode == 101 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            // Thực hiện hành động nếu quyền BLUETOOTH_SCAN được cấp
+        }
     }
 
-}
+    // Hàm xử lý cho thiết bị 1
+    private void thietTbi1() {
+        if (btSocket != null) {
+            try {
+                if (this.flaglamp1 == 0) {
+                    this.flaglamp1 = 1;
+                    this.btnTb1.setBackgroundResource(R.drawable.tb1on);
+                    btSocket.getOutputStream().write("1".toString().getBytes());
+                    txt1.setText("Thiết bị số 1 đang bật");
+                    return;
+                } else {
+                    if (this.flaglamp1 != 1) return;
+                    this.flaglamp1 = 0;
+                    this.btnTb1.setBackgroundResource(R.drawable.tb1off);
+                    btSocket.getOutputStream().write("A".toString().getBytes());
+                    txt1.setText("Thiết bị số 1 đang tắt");
+                }
+            } catch (IOException e) {
+                msg("Lỗi");
+            }
+        }
+    }
 
+    // Hàm xử lý ngắt kết nối Bluetooth
+    private void Disconnect() {
+        if (btSocket != null) {
+            try {
+                btSocket.close();
+            } catch (IOException e) {
+                msg("Lỗi");
+            }
+        }
+        finish();
+    }
+
+    private void thiettb7() {
+        if (btSocket != null) {
+            try {
+                if (this.flaglamp2 == 0) {
+                    this.flaglamp2 = 1;
+                    this.btnTb2.setBackgroundResource(R.drawable.tb2on);
+                    btSocket.getOutputStream().write("7".toString().getBytes());
+                    txt1.setText("Thiết bị số 7 đang bật");
+                } else {
+                    if (this.flaglamp2 != 1) return;
+                    this.flaglamp2 = 0;
+                    this.btnTb2.setBackgroundResource(R.drawable.tb2off);
+                    btSocket.getOutputStream().write("G".toString().getBytes());
+                    txt1.setText("Thiết bị số 7 đang tắt");
+                }
+            } catch (IOException e) {
+                msg("Lỗi");
+            }
+        }
+    }
+}
