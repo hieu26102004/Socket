@@ -1,10 +1,11 @@
 package com.example.socket;
-import android.Manifest;
 
+import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
@@ -14,6 +15,8 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
@@ -33,71 +36,69 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Ánh xạ
         btnPaired = (Button) findViewById(R.id.btnTimthietbi);
         listDanhSach = (ListView) findViewById(R.id.listTb);
 
-        // Kiểm tra thiết bị có Bluetooth
         myBluetooth = BluetoothAdapter.getDefaultAdapter();
         if (myBluetooth == null) {
-            // Hiển thị thông báo rằng thiết bị không có Bluetooth
-            Toast.makeText(getApplicationContext(), "Thiết bị Bluetooth chưa bật", Toast.LENGTH_LONG).show();
-            // Thoát ứng dụng
+            Toast.makeText(getApplicationContext(), "Thiết bị không hỗ trợ Bluetooth", Toast.LENGTH_LONG).show();
             finish();
         } else if (!myBluetooth.isEnabled()) {
-            // Yêu cầu người dùng bật Bluetooth
             Intent turnBTon = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(getApplicationContext(), "Thiết bị Bluetooth chưa bật", Toast.LENGTH_LONG).show();
-                return;
-            }
-            Toast.makeText(getApplicationContext(), "Thiết bị Bluetooth đã bật", Toast.LENGTH_LONG).show();
             startActivityForResult(turnBTon, REQUEST_BLUETOOTH);
         }
 
-        // Kết thúc kiểm tra thiết bị có Bluetooth
-        // Xử lý sự kiện tìm thiết bị
         btnPaired.setOnClickListener(new View.OnClickListener() {
+            @RequiresApi(api = Build.VERSION_CODES.S)
             @Override
             public void onClick(View v) {
-                pairedDevicesList(); // Gọi hàm tìm thiết bị
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 1);
+                } else {
+                    pairedDevicesList();
+                }
             }
         });
     }
-    private void pairedDevicesList() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            pairedDevices = myBluetooth.getBondedDevices();
-            ArrayList list = new ArrayList();
 
-            if (pairedDevices.size() > 0) {
+    private void pairedDevicesList() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+            pairedDevices = myBluetooth.getBondedDevices();
+            ArrayList<String> list = new ArrayList<>();
+
+            if (!pairedDevices.isEmpty()) {
                 for (BluetoothDevice bt : pairedDevices) {
-                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                        Toast.makeText(getApplicationContext(), "Danh sách thiết bị Bluetooth đã bật", Toast.LENGTH_LONG).show();
-                        list.add(bt.getName() + "\n" + bt.getAddress()); // Lấy tên và địa chỉ của thiết bị
-                    }
+                    list.add(bt.getName() + "\n" + bt.getAddress());
                 }
             } else {
                 Toast.makeText(getApplicationContext(), "Không tìm thấy thiết bị kết nối.", Toast.LENGTH_LONG).show();
             }
-
-            final ArrayAdapter adapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, list);
+            ArrayAdapter adapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, list);
             listDanhSach.setAdapter(adapter);
-            listDanhSach.setOnItemClickListener(myListClickListener); // Phương thức gọi khi chọn thiết bị từ danh sách
-            return;
+            listDanhSach.setOnItemClickListener(myListClickListener);
         }
     }
-    private AdapterView.OnItemClickListener myListClickListener = new AdapterView.OnItemClickListener() {
-        @Override
-        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-            // Lấy thông tin thiết bị từ dòng được chọn
-            String info = ((TextView) view).getText().toString();
-            String address = info.substring(info.length() - 17); // lấy địa chỉ MAC (cuối chuỗi)
 
-            // Chuyển sang activity mới hoặc xử lý kết nối
-            Intent intent = new Intent(MainActivity.this, BlueControl.class);
-            intent.putExtra(EXTRA_ADDRESS, address);
-            startActivity(intent);
+    private final AdapterView.OnItemClickListener myListClickListener = new AdapterView.OnItemClickListener() {
+        public void onItemClick(AdapterView<?> av, View v, int arg2, long arg3) {
+            String info = ((TextView) v).getText().toString();
+            String address = info.substring(info.length() - 17);
+
+            Intent i = new Intent(MainActivity.this, BlueControl.class);
+            i.putExtra(EXTRA_ADDRESS, address);
+            startActivity(i);
         }
     };
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                pairedDevicesList();
+            } else {
+                Toast.makeText(this, "Cần quyền BLUETOOTH_CONNECT để hoạt động", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
 }

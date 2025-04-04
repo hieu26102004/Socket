@@ -145,12 +145,12 @@ public class BlueControl extends AppCompatActivity {
                     myBluetooth = BluetoothAdapter.getDefaultAdapter(); // get the mobile bluetooth device
                     // connects to the device's address and checks if it's available
                     BluetoothDevice dispositivo = myBluetooth.getRemoteDevice(address);
-                    if (ActivityCompat.checkSelfPermission(BlueControl.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                        // create a RFCOMM (SPP) connection
+                    if (ActivityCompat.checkSelfPermission(BlueControl.this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
                         btSocket = dispositivo.createInsecureRfcommSocketToServiceRecord(myUUID);
                         BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
-                        btSocket.connect(); // start connection
+                        btSocket.connect();
                     }
+
                 }
             } catch (IOException e) {
                 ConnectSuccess = false; // if the try failed, you can check the exception here
@@ -177,14 +177,28 @@ public class BlueControl extends AppCompatActivity {
     }
     private void pairedDevicesList1() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            pairedDevices1 = myBluetooth.getBondedDevices();
-            if (pairedDevices1.size() > 0) {
-                for (BluetoothDevice bt : pairedDevices1) {
-                    txtMAC.setText(bt.getName() + " - " + bt.getAddress()); // Hiển thị tên và địa chỉ MAC của thiết bị
-                }
-            } else {
-                Toast.makeText(getApplicationContext(), "Không tìm thấy thiết bị kết nối.", Toast.LENGTH_LONG).show();
+            // Nếu chưa có quyền thì yêu cầu cấp
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 100);
+            return;
+        }
+
+        pairedDevices1 = myBluetooth.getBondedDevices();
+        if (pairedDevices1.size() > 0) {
+            for (BluetoothDevice bt : pairedDevices1) {
+                txtMAC.setText(bt.getName() + " - " + bt.getAddress()); // Hiển thị tên và địa chỉ MAC
             }
+        } else {
+            Toast.makeText(getApplicationContext(), "Không tìm thấy thiết bị kết nối.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            pairedDevicesList1(); // Gọi lại khi đã được cấp quyền
+        } else {
+            Toast.makeText(this, "Bạn cần cấp quyền BLUETOOTH_CONNECT để xem thiết bị.", Toast.LENGTH_SHORT).show();
         }
     }
 
